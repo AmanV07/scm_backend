@@ -1,9 +1,12 @@
 from bson import ObjectId
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
+from jose import JWTError, jwt
 from pymongo import MongoClient
 from passlib.hash import bcrypt
+from datetime import datetime, timedelta
 
 app = FastAPI()
 
@@ -26,6 +29,24 @@ app.add_middleware(
 client = MongoClient('localhost', 27017)
 db = client['SCM_APP']
 user_collection = db.users
+
+# Secret key to sign JWT tokens
+SECRET_KEY = "your-secret-key"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# OAuth2 scheme for JWT token authentication
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+# Function to create a JWT token
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    # Set token expiration time
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
 
 class UserSignUp(BaseModel):
     username: str
@@ -58,13 +79,13 @@ async def signup(user : UserSignUp):
     return {'message' : 'User Registered Successfully !', "user_id": str(user_id)}
 
 
-@app.get('/user/{user_id}/role')
-async def get_user_role(user_id):
-    user_data = user_collection.find_one({'_id' : ObjectId(user_id)})
-    if user_data:
-        return {'role' : user_data['role']}
-    else:
-        raise HTTPException(404, 'User Not Found !')
+# @app.get('/user/{user_id}/role')
+# async def get_user_role(user_id):
+#     user_data = user_collection.find_one({'_id' : ObjectId(user_id)})
+#     if user_data:
+#         return {'role' : user_data['role']}
+#     else:
+#         raise HTTPException(404, 'User Not Found !')
 
 
 @app.post('/login')
@@ -73,8 +94,10 @@ async def login(user : UserLogin):
     if not user_data:
         raise HTTPException(401, 'Invalid Email or Password')
     if not verify_password(user.password, user_data['password']):
-        raise HTTPException(401, 'Invalid Email or Password')
-    return {"message" : "User Signed In Successfully !", "user_id" : str(user_data['_id']), "role" : user_data['role']}
+        raise HTTPException(401, 'Inval id Email or Password')
+    access_token = create_access_token(data={"sub": str(user_data['_id'])})
+    return {"access_token": access_token, "token_type": "bearer"}
+    # return {"message" : "User Signed In Successfully !", "user_id" : str(user_data['_id']), "role" : user_data['role']}
 
 
 @app.get("/logout")
