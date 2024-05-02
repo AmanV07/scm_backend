@@ -1,12 +1,12 @@
-from bson import ObjectId
-from fastapi import FastAPI, HTTPException, Depends, status
+# from bson import ObjectId
+from fastapi import FastAPI, HTTPException#, Depends, status
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
-from jose import JWTError, jwt
+from jose import jwt#, JWTError
 from pymongo import MongoClient
 from passlib.hash import bcrypt
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 app = FastAPI()
 
@@ -29,6 +29,7 @@ app.add_middleware(
 client = MongoClient('localhost', 27017)
 db = client['SCM_APP']
 user_collection = db.users
+shipment_collection = db.shipments
 
 # Secret key to sign JWT tokens
 SECRET_KEY = "your-secret-key"
@@ -58,6 +59,20 @@ class UserLogin(BaseModel):
     email : EmailStr
     password : str
 
+class Shipment(BaseModel):
+    shipment_no : int
+    route_details : str
+    device : str
+    po_no : str
+    ndc_no : str
+    serial_no_goods : str
+    container_no : str
+    goods_type : str
+    expected_delivery_date : datetime
+    delivery_no : int
+    batch_id : int
+    shipment_desc : str
+
 def hash_password(plain_password : str) -> str:
     return bcrypt.hash(plain_password)
 
@@ -78,7 +93,6 @@ async def signup(user : UserSignUp):
     user_id = user_collection.insert_one(user_details).inserted_id
     return {'message' : 'User Registered Successfully !', "user_id": str(user_id)}
 
-
 # @app.get('/user/{user_id}/role')
 # async def get_user_role(user_id):
 #     user_data = user_collection.find_one({'_id' : ObjectId(user_id)})
@@ -86,7 +100,6 @@ async def signup(user : UserSignUp):
 #         return {'role' : user_data['role']}
 #     else:
 #         raise HTTPException(404, 'User Not Found !')
-
 
 @app.post('/login')
 async def login(user : UserLogin):
@@ -97,14 +110,18 @@ async def login(user : UserLogin):
         raise HTTPException(401, 'Inval id Email or Password')
     access_token = create_access_token(data={"sub": str(user_data['_id'])})
     return {"access_token": access_token, "token_type": "bearer"}
-    # return {"message" : "User Signed In Successfully !", "user_id" : str(user_data['_id']), "role" : user_data['role']}
+    
+
+
+@app.post('/createShipment')
+async def createShipment(shipment : Shipment):
+    if shipment_collection.find_one({'shipment_no' : shipment.shipment_no}):
+        raise HTTPException(400, 'Shipment Number Already Exists.')
+    shipment_details = shipment.dict()
+    shipment_id = shipment_collection.insert_one(shipment_details).inserted_id
+    return {'message' : 'Shipment created successfully !', "shipment_id": str(shipment_id)}
 
 
 @app.get("/logout")
 async def logout():
-    # Your logout logic here, such as clearing session data or invalidating tokens
-    # For example, if using sessions, you can clear session data like this:
-    # session.clear()  # Make sure to import session from your session management library
-    
-    # In this example, just return a simple message
     return {"message": "Logout successful"}
